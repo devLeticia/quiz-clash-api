@@ -3,6 +3,7 @@ import re
 from dotenv import load_dotenv
 from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
+from rapidfuzz import fuzz
 
 from quiz_clash.schemas.question import Question, QuestionList
 
@@ -30,21 +31,11 @@ Text:
     return result.questions
 
 
-def _normalize(text: str) -> str:
-    """Collapse whitespace/newlines into single spaces for reliable comparison."""
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def is_grounded(question: Question, source_text: str) -> bool:
-    """Check whether the question's source_quote actually appears in the source text."""
-    return _normalize(question.source_quote) in _normalize(source_text)
-
-
 def generate_questions(
     chunks: list[Document],
     questions_per_batch: int = 1,
     chunks_per_batch: int = 3,
-    language: str = "English (en-US)",
+    language: str = "Portuguese (pt-BR)",
 ) -> list[Question]:
     """Generate quiz questions from a pre-selected set of chunks, in small batches."""
     all_questions: list[Question] = []
@@ -57,3 +48,20 @@ def generate_questions(
         all_questions.extend(questions)
 
     return all_questions
+
+
+def _normalize(text: str) -> str:
+    """Normalize whitespace and quote characters for reliable comparison."""
+    text = re.sub(r"\s+", " ", text)
+    text = text.replace(""", '"').replace(""", '"')
+    text = text.replace("'", "'").replace("'", "'")
+    return text.strip()
+
+
+def is_grounded(question: Question, source_text: str, threshold: float = 85.0) -> bool:
+    """Check whether the question's source_quote closely matches the source text."""
+    normalized_quote = _normalize(question.source_quote)
+    normalized_source = _normalize(source_text)
+
+    score = fuzz.partial_ratio(normalized_quote, normalized_source)
+    return score >= threshold

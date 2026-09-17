@@ -12,6 +12,7 @@ dependencies = [
     "langchain-text-splitters>=1.1.2",
     "pypdf>=6.19.0",
     "python-dotenv>=1.2.3",
+    "rapidfuzz>=3.14.6",
 ]
 
 [project.scripts]
