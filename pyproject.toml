@@ -4,7 +4,15 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "chromadb>=1.5.9",
+    "langchain-chroma>=1.1.0",
+    "langchain-community>=0.4.2",
+    "langchain-openai>=1.6.2",
+    "langchain-text-splitters>=1.1.2",
+    "pypdf>=6.19.0",
+    "python-dotenv>=1.2.3",
+]
 
 [project.scripts]
 quiz-clash = "quiz_clash:main"
