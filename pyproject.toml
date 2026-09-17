@@ -10,6 +10,7 @@ dependencies = [
     "langchain-community>=0.4.2",
     "langchain-openai>=1.6.2",
     "langchain-text-splitters>=1.1.2",
+    "langgraph>=1.2.11",
     "pypdf>=6.19.0",
     "python-dotenv>=1.2.3",
     "rapidfuzz>=3.14.6",

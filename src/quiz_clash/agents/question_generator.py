@@ -35,9 +35,13 @@ def generate_questions(
     chunks: list[Document],
     questions_per_batch: int = 1,
     chunks_per_batch: int = 3,
-    language: str = "Portuguese (pt-BR)",
+    language: str = "English (en-US)",
 ) -> list[Question]:
-    """Generate quiz questions from a pre-selected set of chunks, in small batches."""
+    """Generate quiz questions from a pre-selected set of chunks, in small batches.
+
+    Questions whose source_quote cannot be verified against the batch text
+    are discarded automatically.
+    """
     all_questions: list[Question] = []
 
     for i in range(0, len(chunks), chunks_per_batch):
@@ -45,7 +49,9 @@ def generate_questions(
         text = "\n\n".join(chunk.page_content for chunk in batch)
 
         questions = _generate_from_text(text, questions_per_batch, language)
-        all_questions.extend(questions)
+
+        grounded_questions = [q for q in questions if is_grounded(q, text)]
+        all_questions.extend(grounded_questions)
 
     return all_questions
 
