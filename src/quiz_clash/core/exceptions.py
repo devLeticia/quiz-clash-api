@@ -1,0 +1,14 @@
+class QuizClashError(Exception):
+    """Base exception for all domain errors in Quiz Clash."""
+
+
+class PDFProcessingError(QuizClashError):
+    """Raised when a PDF file cannot be read or parsed."""
+
+
+class EmptyDocumentError(QuizClashError):
+    """Raised when a document has no extractable text."""
+
+
+class QuestionGenerationError(QuizClashError):
+    """Raised when the LLM fails to generate valid questions."""

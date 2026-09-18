@@ -5,6 +5,7 @@ from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
 from rapidfuzz import fuzz
 
+from quiz_clash.core.exceptions import QuestionGenerationError
 from quiz_clash.schemas.question import Question, QuestionList
 
 load_dotenv()
@@ -27,7 +28,10 @@ copy it word for word.
 Text:
 {text}
 """
-    result = structured_llm.invoke(prompt)
+    try:
+        result = structured_llm.invoke(prompt)
+    except Exception as e:
+        raise QuestionGenerationError(f"LLM failed to generate questions: {e}") from e
     return result.questions
 
 
