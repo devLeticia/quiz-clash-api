@@ -15,9 +15,10 @@ class Question(BaseModel):
         ge=0,
         le=3,
     )
-    source_quote: str = Field(
-        description="The exact sentence or phrase copied verbatim from the source "
-        "text that proves the correct answer"
+    source_quote: str | None = Field(
+        default=None,
+        description="Exact sentence from the source text proving the answer, "
+        "if the question was generated from a document",
     )
 
 

@@ -71,3 +71,19 @@ def is_grounded(question: Question, source_text: str, threshold: float = 85.0) -
 
     score = fuzz.partial_ratio(normalized_quote, normalized_source)
     return score >= threshold
+
+
+def generate_questions_from_topic(
+    topic: str,
+    num_questions: int = 5,
+    language: str = "English (en-US)",
+) -> list[Question]:
+    """Generate quiz questions about a topic using the LLM's own knowledge (no source document)."""
+    prompt = f"""Create {num_questions} quiz questions about the topic: "{topic}".
+Write everything IN {language}.
+
+Each question must have exactly 4 options and one correct answer.
+Do not include a source_quote - these questions are based on general knowledge, not a document.
+"""
+    result = structured_llm.invoke(prompt)
+    return result.questions
