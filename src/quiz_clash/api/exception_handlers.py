@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 
 from quiz_clash.core.exceptions import (
     EmptyDocumentError,
+    ImageProcessingError,
     PDFProcessingError,
     QuestionGenerationError,
 )
@@ -20,4 +21,8 @@ def register_exception_handlers(app: FastAPI) -> None:
     """Register all domain exception handlers on the FastAPI app."""
     app.add_exception_handler(PDFProcessingError, bad_input_handler)
     app.add_exception_handler(EmptyDocumentError, bad_input_handler)
+    app.add_exception_handler(QuestionGenerationError, generation_error_handler)
+    app.add_exception_handler(PDFProcessingError, bad_input_handler)
+    app.add_exception_handler(EmptyDocumentError, bad_input_handler)
+    app.add_exception_handler(ImageProcessingError, bad_input_handler)
     app.add_exception_handler(QuestionGenerationError, generation_error_handler)

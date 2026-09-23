@@ -12,3 +12,7 @@ class EmptyDocumentError(QuizClashError):
 
 class QuestionGenerationError(QuizClashError):
     """Raised when the LLM fails to generate valid questions."""
+
+
+class ImageProcessingError(QuizClashError):
+    """Raised when an image cannot be read or no text can be extracted from it."""

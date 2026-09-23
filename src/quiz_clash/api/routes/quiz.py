@@ -9,6 +9,7 @@ from quiz_clash.agents.question_generator import (
     generate_questions,
     generate_questions_from_topic,
 )
+from quiz_clash.ingestion.image_loader import load_image
 from quiz_clash.ingestion.pdf_loader import load_pdf
 from quiz_clash.rag.chunking import split_documents
 from quiz_clash.rag.vector_store import build_vector_store, select_diverse_chunks
@@ -72,5 +73,28 @@ def create_quiz_from_pdf(
         )
     finally:
         tmp_path.unlink(missing_ok=True)
+
+    return QuizResponse(questions=questions[:num_questions])
+
+
+@router.post("/from-image", response_model=QuizResponse)
+def create_quiz_from_image(
+    file: UploadFile,
+    num_questions: int = 5,
+    language: str = "English (en-US)",
+):
+    image_bytes = file.file.read()
+
+    docs = load_image(image_bytes, content_type=file.content_type, source_name=file.filename)
+    chunks = split_documents(docs)
+    store = build_vector_store(chunks)
+    selected = select_diverse_chunks(store, k=min(num_questions * 2, len(chunks)))
+
+    questions = generate_questions(
+        selected,
+        questions_per_batch=1,
+        chunks_per_batch=2,
+        language=language,
+    )
 
     return QuizResponse(questions=questions[:num_questions])
