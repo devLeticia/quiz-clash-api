@@ -3,16 +3,14 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, UploadFile
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
-from quiz_clash.agents.question_generator import (
-    generate_questions,
-    generate_questions_from_topic,
-)
-from quiz_clash.ingestion.document_loader import load_document, load_pdf
-from quiz_clash.rag.chunking import split_documents
-from quiz_clash.rag.vector_store import build_vector_store, select_diverse_chunks
+from quiz_clash.agents.question_generator import generate_questions_from_topic
+from quiz_clash.ingestion.document_loader import load_document
+from quiz_clash.ingestion.image_loader import load_image
+from quiz_clash.ingestion.url_loader import load_url
 from quiz_clash.schemas.question import Question
+from quiz_clash.services.quiz_service import generate_quiz_from_documents
 
 router = APIRouter()
 
@@ -34,6 +32,19 @@ class TopicRequest(BaseModel):
         return value
 
 
+class URLRequest(BaseModel):
+    url: HttpUrl
+    num_questions: int = Field(default=5, ge=1, le=20)
+    language: str = "English (en-US)"
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def add_scheme_if_missing(cls, value: str) -> str:
+        if isinstance(value, str) and not value.startswith(("http://", "https://")):
+            return f"https://{value}"
+        return value
+
+
 class QuizResponse(BaseModel):
     questions: list[Question]
 
@@ -46,34 +57,6 @@ def create_quiz_from_topic(request: TopicRequest):
         language=request.language,
     )
     return QuizResponse(questions=questions)
-
-
-@router.post("/from-pdf", response_model=QuizResponse)
-def create_quiz_from_pdf(
-    file: UploadFile,
-    num_questions: int = 5,
-    language: str = "English (en-US)",
-):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        tmp.write(file.file.read())
-        tmp_path = Path(tmp.name)
-
-    try:
-        docs = load_pdf(str(tmp_path))
-        chunks = split_documents(docs)
-        store = build_vector_store(chunks)
-        selected = select_diverse_chunks(store, k=min(num_questions * 2, len(chunks)))
-
-        questions = generate_questions(
-            selected,
-            questions_per_batch=1,
-            chunks_per_batch=2,
-            language=language,
-        )
-    finally:
-        tmp_path.unlink(missing_ok=True)
-
-    return QuizResponse(questions=questions[:num_questions])
 
 
 @router.post("/from-document", response_model=QuizResponse)
@@ -93,18 +76,28 @@ def create_quiz_from_document(
 
     try:
         docs = load_document(file_bytes, filename=file.filename, tmp_path_for_pdf=tmp_path)
-        chunks = split_documents(docs)
-        store = build_vector_store(chunks)
-        selected = select_diverse_chunks(store, k=min(num_questions * 2, len(chunks)))
-
-        questions = generate_questions(
-            selected,
-            questions_per_batch=1,
-            chunks_per_batch=2,
-            language=language,
-        )
+        questions = generate_quiz_from_documents(docs, num_questions, language)
     finally:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
 
-    return QuizResponse(questions=questions[:num_questions])
+    return QuizResponse(questions=questions)
+
+
+@router.post("/from-image", response_model=QuizResponse)
+def create_quiz_from_image(
+    file: UploadFile,
+    num_questions: int = 5,
+    language: str = "English (en-US)",
+):
+    image_bytes = file.file.read()
+    docs = load_image(image_bytes, content_type=file.content_type, source_name=file.filename)
+    questions = generate_quiz_from_documents(docs, num_questions, language)
+    return QuizResponse(questions=questions)
+
+
+@router.post("/from-url", response_model=QuizResponse)
+def create_quiz_from_url(request: URLRequest):
+    docs = load_url(str(request.url))
+    questions = generate_quiz_from_documents(docs, request.num_questions, request.language)
+    return QuizResponse(questions=questions)

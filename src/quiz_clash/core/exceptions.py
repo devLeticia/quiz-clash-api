@@ -24,3 +24,11 @@ class DocxProcessingError(QuizClashError):
 
 class UnsupportedFileTypeError(QuizClashError):
     """Raised when the uploaded file type is not supported."""
+
+
+class URLProcessingError(QuizClashError):
+    """Raised when a URL cannot be fetched or its content cannot be extracted."""
+
+
+class InsufficientContentError(QuizClashError):
+    """Raised when there isn't enough extracted text to generate a meaningful quiz."""

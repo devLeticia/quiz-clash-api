@@ -47,7 +47,6 @@ def load_image(
         raise ImageProcessingError(f"Failed to process image with vision model: {e}") from e
 
     text = response.content.strip()
-    print(f"aqui esta o texto: {text}")
 
     if not text:
         raise EmptyDocumentError("No readable text found in the image.")

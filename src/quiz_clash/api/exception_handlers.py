@@ -5,6 +5,7 @@ from quiz_clash.core.exceptions import (
     DocxProcessingError,
     EmptyDocumentError,
     ImageProcessingError,
+    InsufficientContentError,
     PDFProcessingError,
     QuestionGenerationError,
     UnsupportedFileTypeError,
@@ -25,8 +26,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(EmptyDocumentError, bad_input_handler)
     app.add_exception_handler(QuestionGenerationError, generation_error_handler)
     app.add_exception_handler(PDFProcessingError, bad_input_handler)
-    app.add_exception_handler(EmptyDocumentError, bad_input_handler)
     app.add_exception_handler(ImageProcessingError, bad_input_handler)
-    app.add_exception_handler(QuestionGenerationError, generation_error_handler)
     app.add_exception_handler(DocxProcessingError, bad_input_handler)
     app.add_exception_handler(UnsupportedFileTypeError, bad_input_handler)
+    app.add_exception_handler(InsufficientContentError, bad_input_handler)
