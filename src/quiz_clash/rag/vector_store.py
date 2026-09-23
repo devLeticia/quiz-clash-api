@@ -1,18 +1,23 @@
-from dotenv import load_dotenv
+import uuid
+
+import chromadb
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
-
-load_dotenv()
 
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
 
 def build_vector_store(chunks: list[Document]) -> Chroma:
-    """Create a Chroma vector store from document chunks."""
+    """Create a fresh, isolated in-memory vector store scoped to a single request."""
+    client = chromadb.EphemeralClient()
+    collection_name = f"quiz-{uuid.uuid4().hex}"
+
     return Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
+        client=client,
+        collection_name=collection_name,
     )
 
 

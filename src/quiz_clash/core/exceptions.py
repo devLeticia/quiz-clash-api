@@ -16,3 +16,11 @@ class QuestionGenerationError(QuizClashError):
 
 class ImageProcessingError(QuizClashError):
     """Raised when an image cannot be read or no text can be extracted from it."""
+
+
+class DocxProcessingError(QuizClashError):
+    """Raised when a DOCX file cannot be read or parsed."""
+
+
+class UnsupportedFileTypeError(QuizClashError):
+    """Raised when the uploaded file type is not supported."""
