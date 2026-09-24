@@ -7,6 +7,7 @@ from langchain_core.documents import Document
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from quiz_clash.agents.question_generator import generate_questions_from_topic
+from quiz_clash.ingestion.audio_loader import load_audio
 from quiz_clash.ingestion.document_loader import load_document
 from quiz_clash.ingestion.image_loader import load_image
 from quiz_clash.ingestion.url_loader import load_url
@@ -114,4 +115,16 @@ class PastedTextRequest(BaseModel):
 def create_quiz_from_text(request: PastedTextRequest):
     docs = [Document(page_content=request.text, metadata={"source": "pasted_text"})]
     questions = generate_quiz_from_documents(docs, request.num_questions, request.language)
+    return QuizResponse(questions=questions)
+
+
+@router.post("/from-audio", response_model=QuizResponse)
+def create_quiz_from_audio(
+    file: UploadFile,
+    num_questions: int = 5,
+    language: str = "English (en-US)",
+):
+    audio_bytes = file.file.read()
+    docs = load_audio(audio_bytes, filename=file.filename)
+    questions = generate_quiz_from_documents(docs, num_questions, language)
     return QuizResponse(questions=questions)

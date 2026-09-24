@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from quiz_clash.core.exceptions import (
+    AudioProcessingError,
     DocxProcessingError,
     EmptyDocumentError,
     ImageProcessingError,
@@ -32,3 +33,4 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(UnsupportedFileTypeError, bad_input_handler)
     app.add_exception_handler(InsufficientContentError, bad_input_handler)
     app.add_exception_handler(PptxProcessingError, bad_input_handler)
+    app.add_exception_handler(AudioProcessingError, bad_input_handler)

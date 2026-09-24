@@ -36,3 +36,7 @@ class InsufficientContentError(QuizClashError):
 
 class PptxProcessingError(QuizClashError):
     """Raised when a PPTX file cannot be read or parsed."""
+
+
+class AudioProcessingError(QuizClashError):
+    """Raised when an audio file cannot be transcribed."""
