@@ -84,7 +84,12 @@ def create_quiz_from_document(
         tmp_path = str(tmp_dir / tmp_name)
 
     try:
-        docs = load_document(file_bytes, filename=file.filename, tmp_path_for_pdf=tmp_path)
+        docs = load_document(
+            file_bytes,
+            filename=file.filename,
+            detected_mime=detected_mime,
+            tmp_path_for_pdf=tmp_path,
+        )
         questions = generate_quiz_from_documents(docs, num_questions, language)
     finally:
         if tmp_path:
