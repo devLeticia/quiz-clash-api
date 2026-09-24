@@ -32,3 +32,7 @@ class URLProcessingError(QuizClashError):
 
 class InsufficientContentError(QuizClashError):
     """Raised when there isn't enough extracted text to generate a meaningful quiz."""
+
+
+class PptxProcessingError(QuizClashError):
+    """Raised when a PPTX file cannot be read or parsed."""

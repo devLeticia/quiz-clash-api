@@ -5,8 +5,9 @@ from langchain_core.documents import Document
 from quiz_clash.core.exceptions import EmptyDocumentError, UnsupportedFileTypeError
 from quiz_clash.ingestion.docx_loader import load_docx
 from quiz_clash.ingestion.pdf_loader import load_pdf
+from quiz_clash.ingestion.pptx_loader import load_pptx
 
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt"}
+SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".pptx"}
 
 
 def _load_txt(file_bytes: bytes, source_name: str) -> list[Document]:
@@ -21,11 +22,12 @@ def _load_txt(file_bytes: bytes, source_name: str) -> list[Document]:
 def load_document(
     file_bytes: bytes, filename: str, tmp_path_for_pdf: str | None = None
 ) -> list[Document]:
-    """Detect the document type from its filename and dispatch to the right loader."""
     suffix = Path(filename).suffix.lower()
 
     if suffix == ".docx":
         return load_docx(file_bytes, source_name=filename)
+    if suffix == ".pptx":
+        return load_pptx(file_bytes, source_name=filename)
     if suffix == ".txt":
         return _load_txt(file_bytes, source_name=filename)
     if suffix == ".pdf":
