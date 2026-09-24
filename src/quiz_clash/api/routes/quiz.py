@@ -98,6 +98,6 @@ def create_quiz_from_image(
 
 @router.post("/from-url", response_model=QuizResponse)
 def create_quiz_from_url(request: URLRequest):
-    docs = load_url(str(request.url))
+    docs = load_url(str(request.url), language=request.language)
     questions = generate_quiz_from_documents(docs, request.num_questions, request.language)
     return QuizResponse(questions=questions)
