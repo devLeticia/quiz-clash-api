@@ -5,6 +5,7 @@ from quiz_clash.core.exceptions import (
     AudioProcessingError,
     DocxProcessingError,
     EmptyDocumentError,
+    FileTooLargeError,
     ImageProcessingError,
     InsufficientContentError,
     PDFProcessingError,
@@ -34,3 +35,4 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(InsufficientContentError, bad_input_handler)
     app.add_exception_handler(PptxProcessingError, bad_input_handler)
     app.add_exception_handler(AudioProcessingError, bad_input_handler)
+    app.add_exception_handler(FileTooLargeError, bad_input_handler)

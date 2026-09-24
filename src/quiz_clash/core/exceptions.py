@@ -40,3 +40,7 @@ class PptxProcessingError(QuizClashError):
 
 class AudioProcessingError(QuizClashError):
     """Raised when an audio file cannot be transcribed."""
+
+
+class FileTooLargeError(QuizClashError):
+    """Raised when an uploaded file exceeds the maximum allowed size."""

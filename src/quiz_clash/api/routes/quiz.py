@@ -7,6 +7,11 @@ from langchain_core.documents import Document
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from quiz_clash.agents.question_generator import generate_questions_from_topic
+from quiz_clash.api.validation import (
+    read_upload_within_limit,
+    safe_temp_filename,
+    validate_content_type,
+)
 from quiz_clash.ingestion.audio_loader import load_audio
 from quiz_clash.ingestion.document_loader import load_document
 from quiz_clash.ingestion.image_loader import load_image
@@ -67,14 +72,16 @@ def create_quiz_from_document(
     num_questions: int = 5,
     language: str = "English (en-US)",
 ):
-    file_bytes = file.file.read()
-    suffix = Path(file.filename).suffix.lower()
+    file_bytes = read_upload_within_limit(file)
+    detected_mime = validate_content_type(file_bytes, file.filename, category="document")
 
     tmp_path = None
-    if suffix == ".pdf":
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+    if detected_mime == "application/pdf":
+        tmp_name = safe_temp_filename(detected_mime)
+        tmp_dir = Path(tempfile.gettempdir())
+        with open(tmp_dir / tmp_name, "wb") as tmp:
             tmp.write(file_bytes)
-            tmp_path = tmp.name
+        tmp_path = str(tmp_dir / tmp_name)
 
     try:
         docs = load_document(file_bytes, filename=file.filename, tmp_path_for_pdf=tmp_path)
@@ -92,7 +99,8 @@ def create_quiz_from_image(
     num_questions: int = 5,
     language: str = "English (en-US)",
 ):
-    image_bytes = file.file.read()
+    image_bytes = read_upload_within_limit(file)
+    validate_content_type(image_bytes, file.filename, category="image")
     docs = load_image(image_bytes, content_type=file.content_type, source_name=file.filename)
     questions = generate_quiz_from_documents(docs, num_questions, language)
     return QuizResponse(questions=questions)
@@ -124,7 +132,8 @@ def create_quiz_from_audio(
     num_questions: int = 5,
     language: str = "English (en-US)",
 ):
-    audio_bytes = file.file.read()
+    audio_bytes = read_upload_within_limit(file)
+    validate_content_type(audio_bytes, file.filename, category="audio")
     docs = load_audio(audio_bytes, filename=file.filename)
     questions = generate_quiz_from_documents(docs, num_questions, language)
     return QuizResponse(questions=questions)
