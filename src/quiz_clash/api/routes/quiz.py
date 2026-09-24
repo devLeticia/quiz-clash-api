@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, UploadFile
+from langchain_core.documents import Document
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from quiz_clash.agents.question_generator import generate_questions_from_topic
@@ -99,5 +100,18 @@ def create_quiz_from_image(
 @router.post("/from-url", response_model=QuizResponse)
 def create_quiz_from_url(request: URLRequest):
     docs = load_url(str(request.url), language=request.language)
+    questions = generate_quiz_from_documents(docs, request.num_questions, request.language)
+    return QuizResponse(questions=questions)
+
+
+class PastedTextRequest(BaseModel):
+    text: str = Field(min_length=1)
+    num_questions: int = Field(default=5, ge=1, le=20)
+    language: str = "English (en-US)"
+
+
+@router.post("/from-text", response_model=QuizResponse)
+def create_quiz_from_text(request: PastedTextRequest):
+    docs = [Document(page_content=request.text, metadata={"source": "pasted_text"})]
     questions = generate_quiz_from_documents(docs, request.num_questions, request.language)
     return QuizResponse(questions=questions)
