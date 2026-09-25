@@ -47,8 +47,9 @@ class URLRequest(BaseModel):
     @field_validator("url", mode="before")
     @classmethod
     def add_scheme_if_missing(cls, value: str) -> str:
-        if isinstance(value, str) and not value.startswith(("http://", "https://")):
+        if isinstance(value, str) and "://" not in value:
             return f"https://{value}"
+
         return value
 
 
