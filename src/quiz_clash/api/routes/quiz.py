@@ -2,7 +2,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, UploadFile
+from fastapi import APIRouter, Request, UploadFile
 from langchain_core.documents import Document
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
@@ -12,6 +12,7 @@ from quiz_clash.api.validation import (
     safe_temp_filename,
     validate_content_type,
 )
+from quiz_clash.core.rate_limiter import limiter
 from quiz_clash.ingestion.audio_loader import load_audio
 from quiz_clash.ingestion.document_loader import load_document
 from quiz_clash.ingestion.image_loader import load_image
@@ -20,6 +21,8 @@ from quiz_clash.schemas.question import Question
 from quiz_clash.services.quiz_service import generate_quiz_from_documents
 
 router = APIRouter()
+
+RATE_LIMIT = RATE_LIMIT = "5/minute;30/hour;100/day"
 
 
 class TopicRequest(BaseModel):
@@ -49,7 +52,6 @@ class URLRequest(BaseModel):
     def add_scheme_if_missing(cls, value: str) -> str:
         if isinstance(value, str) and "://" not in value:
             return f"https://{value}"
-
         return value
 
 
@@ -58,17 +60,20 @@ class QuizResponse(BaseModel):
 
 
 @router.post("/from-topic", response_model=QuizResponse)
-def create_quiz_from_topic(request: TopicRequest):
+@limiter.limit(RATE_LIMIT)
+def create_quiz_from_topic(request: Request, body: TopicRequest):
     questions = generate_questions_from_topic(
-        topic=request.topic,
-        num_questions=request.num_questions,
-        language=request.language,
+        topic=body.topic,
+        num_questions=body.num_questions,
+        language=body.language,
     )
     return QuizResponse(questions=questions)
 
 
 @router.post("/from-document", response_model=QuizResponse)
+@limiter.limit(RATE_LIMIT)
 def create_quiz_from_document(
+    request: Request,
     file: UploadFile,
     num_questions: int = 5,
     language: str = "English (en-US)",
@@ -100,7 +105,9 @@ def create_quiz_from_document(
 
 
 @router.post("/from-image", response_model=QuizResponse)
+@limiter.limit(RATE_LIMIT)
 def create_quiz_from_image(
+    request: Request,
     file: UploadFile,
     num_questions: int = 5,
     language: str = "English (en-US)",
@@ -113,9 +120,10 @@ def create_quiz_from_image(
 
 
 @router.post("/from-url", response_model=QuizResponse)
-def create_quiz_from_url(request: URLRequest):
-    docs = load_url(str(request.url), language=request.language)
-    questions = generate_quiz_from_documents(docs, request.num_questions, request.language)
+@limiter.limit(RATE_LIMIT)
+def create_quiz_from_url(request: Request, body: URLRequest):
+    docs = load_url(str(body.url), language=body.language)
+    questions = generate_quiz_from_documents(docs, body.num_questions, body.language)
     return QuizResponse(questions=questions)
 
 
@@ -126,14 +134,17 @@ class PastedTextRequest(BaseModel):
 
 
 @router.post("/from-text", response_model=QuizResponse)
-def create_quiz_from_text(request: PastedTextRequest):
-    docs = [Document(page_content=request.text, metadata={"source": "pasted_text"})]
-    questions = generate_quiz_from_documents(docs, request.num_questions, request.language)
+@limiter.limit(RATE_LIMIT)
+def create_quiz_from_text(request: Request, body: PastedTextRequest):
+    docs = [Document(page_content=body.text, metadata={"source": "pasted_text"})]
+    questions = generate_quiz_from_documents(docs, body.num_questions, body.language)
     return QuizResponse(questions=questions)
 
 
 @router.post("/from-audio", response_model=QuizResponse)
+@limiter.limit(RATE_LIMIT)
 def create_quiz_from_audio(
+    request: Request,
     file: UploadFile,
     num_questions: int = 5,
     language: str = "English (en-US)",
