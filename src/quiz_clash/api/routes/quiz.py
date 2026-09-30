@@ -74,10 +74,12 @@ class URLRequest(BaseModel):
 
 class QuizCreateResponse(BaseModel):
     quiz_id: str
+    requested_questions: int
+    warning: str | None = None
     questions: list[QuestionPublic]
 
 
-def _build_quiz_response(questions: list[Question]) -> QuizCreateResponse:
+def _build_quiz_response(questions: list[Question], requested_questions: int) -> QuizCreateResponse:
     """Shuffle answer positions, store the full quiz (with answers) server-side,
     and return only the public view (no correct answers) to the client."""
     import uuid
@@ -85,7 +87,20 @@ def _build_quiz_response(questions: list[Question]) -> QuizCreateResponse:
     shuffled = shuffle_answer_positions(questions)
     quiz_id = uuid.uuid4().hex
     save_quiz(quiz_id, shuffled)
-    return QuizCreateResponse(quiz_id=quiz_id, questions=[to_public(q) for q in shuffled])
+
+    warning = None
+    if len(questions) < requested_questions:
+        warning = (
+            f"Only {len(questions)} of {requested_questions} questions could be "
+            f"generated from the provided content."
+        )
+
+    return QuizCreateResponse(
+        quiz_id=quiz_id,
+        requested_questions=requested_questions,
+        warning=warning,
+        questions=[to_public(q) for q in shuffled],
+    )
 
 
 @router.post("/from-topic", response_model=QuizCreateResponse)
@@ -96,7 +111,7 @@ def create_quiz_from_topic(request: Request, body: TopicRequest):
         num_questions=body.num_questions,
         language=body.language,
     )
-    return _build_quiz_response(questions)
+    return _build_quiz_response(questions, body.num_questions)
 
 
 @router.post("/from-document", response_model=QuizCreateResponse)
@@ -130,7 +145,7 @@ def create_quiz_from_document(
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
 
-    return _build_quiz_response(questions)
+    return _build_quiz_response(questions, num_questions)
 
 
 @router.post("/from-image", response_model=QuizCreateResponse)
@@ -145,7 +160,7 @@ def create_quiz_from_image(
     validate_content_type(image_bytes, file.filename, category="image")
     docs = load_image(image_bytes, content_type=file.content_type, source_name=file.filename)
     questions = generate_quiz_from_documents(docs, num_questions, language)
-    return _build_quiz_response(questions)
+    return _build_quiz_response(questions, num_questions)
 
 
 @router.post("/from-url", response_model=QuizCreateResponse)
@@ -153,7 +168,7 @@ def create_quiz_from_image(
 def create_quiz_from_url(request: Request, body: URLRequest):
     docs = load_url(str(body.url), language=body.language)
     questions = generate_quiz_from_documents(docs, body.num_questions, body.language)
-    return _build_quiz_response(questions)
+    return _build_quiz_response(questions, body.num_questions)
 
 
 class PastedTextRequest(BaseModel):
@@ -167,7 +182,7 @@ class PastedTextRequest(BaseModel):
 def create_quiz_from_text(request: Request, body: PastedTextRequest):
     docs = [Document(page_content=body.text, metadata={"source": "pasted_text"})]
     questions = generate_quiz_from_documents(docs, body.num_questions, body.language)
-    return _build_quiz_response(questions)
+    return _build_quiz_response(questions, body.num_questions)
 
 
 @router.post("/from-audio", response_model=QuizCreateResponse)
@@ -182,7 +197,7 @@ def create_quiz_from_audio(
     validate_content_type(audio_bytes, file.filename, category="audio")
     docs = load_audio(audio_bytes, filename=file.filename)
     questions = generate_quiz_from_documents(docs, num_questions, language)
-    return _build_quiz_response(questions)
+    return _build_quiz_response(questions, num_questions)
 
 
 class AnswerRequest(BaseModel):
