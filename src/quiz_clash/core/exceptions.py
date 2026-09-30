@@ -58,8 +58,16 @@ class QuizNotFoundError(QuizClashError):
     """Raised when a quiz_id or question_id doesn't exist in the store."""
 
 
+class ParticipantLimitReachedError(QuizClashError):
+    """Raised when a quiz already has its maximum number of participants."""
+
+
 async def bad_input_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+async def conflict_handler(request: Request, exc: Exception):
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
 async def generation_error_handler(request: Request, exc: Exception):
@@ -76,4 +84,5 @@ def register_exception_handlers(app: FastAPI) -> None:
     inheritance (MRO).
     """
     app.add_exception_handler(QuestionGenerationError, generation_error_handler)
+    app.add_exception_handler(ParticipantLimitReachedError, conflict_handler)
     app.add_exception_handler(QuizClashError, bad_input_handler)

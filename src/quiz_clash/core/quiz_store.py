@@ -4,7 +4,10 @@ import threading
 import time
 import uuid
 
+from quiz_clash.core.exceptions import ParticipantLimitReachedError
 from quiz_clash.schemas.question import Question
+
+MAX_PARTICIPANTS_PER_QUIZ = 2
 
 _store: dict[str, dict] = {}
 _store_lock = threading.RLock()
@@ -36,13 +39,18 @@ def get_question(quiz_id: str, question_id: str) -> Question | None:
 
 def create_participant(quiz_id: str) -> str | None:
     """Create a quiz-scoped participant and return its one-time bearer token."""
-    token = secrets.token_urlsafe(32)
-    token_hash = hashlib.sha256(token.encode()).hexdigest()
-
     with _store_lock:
         entry = _store.get(quiz_id)
         if entry is None:
             return None
+        if len(entry["participants"]) >= MAX_PARTICIPANTS_PER_QUIZ:
+            raise ParticipantLimitReachedError(
+                f"Quiz '{quiz_id}' already has the maximum of "
+                f"{MAX_PARTICIPANTS_PER_QUIZ} participants."
+            )
+
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
         entry["participants"][token_hash] = uuid.uuid4().hex
 
     return token
