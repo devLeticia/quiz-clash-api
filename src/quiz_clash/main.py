@@ -7,7 +7,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from quiz_clash.api.routes import quiz
-from quiz_clash.core.exceptions import QuizClashError
+from quiz_clash.core.exceptions import register_exception_handlers
 from quiz_clash.core.rate_limiter import limiter
 
 DEV_ORIGINS = [
@@ -31,10 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.exception_handler(QuizClashError)
-async def quiz_clash_error_handler(request: Request, exc: QuizClashError) -> JSONResponse:
-    return JSONResponse(status_code=400, content={"detail": str(exc)})
+register_exception_handlers(app)
 
 
 @app.exception_handler(Exception)

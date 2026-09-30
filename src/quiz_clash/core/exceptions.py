@@ -1,3 +1,7 @@
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+
 class QuizClashError(Exception):
     """Base exception for all domain errors in Quiz Clash."""
 
@@ -44,3 +48,32 @@ class AudioProcessingError(QuizClashError):
 
 class FileTooLargeError(QuizClashError):
     """Raised when an uploaded file exceeds the maximum allowed size."""
+
+
+class QuestionAlreadyAnsweredError(QuizClashError):
+    """Raised when a question in a quiz has already been answered."""
+
+
+class QuizNotFoundError(QuizClashError):
+    """Raised when a quiz_id or question_id doesn't exist in the store."""
+
+
+async def bad_input_handler(request: Request, exc: Exception):
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+async def generation_error_handler(request: Request, exc: Exception):
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+
+def register_exception_handlers(app: FastAPI) -> None:
+    """Register all domain exception handlers on the FastAPI app.
+
+    QuestionGenerationError gets its own handler (502, since it reflects an
+    upstream LLM failure, not bad input). Every other QuizClashError subclass
+    is caught by the single QuizClashError handler below — new exception
+    types added later don't need a new line here, Starlette matches by
+    inheritance (MRO).
+    """
+    app.add_exception_handler(QuestionGenerationError, generation_error_handler)
+    app.add_exception_handler(QuizClashError, bad_input_handler)
