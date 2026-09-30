@@ -1,6 +1,6 @@
-# src/quiz_clash/schemas/question.py
 import random
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -8,9 +8,25 @@ from pydantic import BaseModel, Field
 class GeneratedQuestion(BaseModel):
     """Raw question shape the LLM fills in — no id, since ids are assigned server-side."""
 
+    question_type: Literal["fact", "understanding"] = Field(
+        description="'fact' asks for a single fact; 'understanding' asks why something "
+        "happens, how two ideas relate, or what would happen in a given situation"
+    )
     question: str = Field(description="The question text")
+    misconceptions: list[str] = Field(
+        description="3 plausible misconceptions a learner could have about this question. "
+        "Each wrong option must be based on one of them.",
+        min_length=3,
+        max_length=3,
+    )
     options: list[str] = Field(
-        description="Exactly 4 possible answers",
+        description="Exactly 4 short possible answers, all from the same category and with a "
+        "similar format. Never repeat the subject or words already stated in the question: "
+        "write only the part that differs (for 'What happens to trade winds during El Niño?' "
+        "use 'They weaken', not 'Trade winds become weaker'). If the answer is a number, "
+        "date, or quantity, every option must be a concise range written with digits "
+        "(e.g. '300-400 million', 'Every 2-4 years'), with non-overlapping ranges and only "
+        "one containing the correct value.",
         min_length=4,
         max_length=4,
     )
@@ -38,7 +54,9 @@ class Question(BaseModel):
     @classmethod
     def from_generated(cls, generated: "GeneratedQuestion") -> "Question":
         """Build a final Question from what the LLM produced, assigning a fresh id."""
-        return cls(id=uuid.uuid4().hex, **generated.model_dump())
+        return cls(
+            id=uuid.uuid4().hex, **generated.model_dump(exclude={"question_type", "misconceptions"})
+        )
 
 
 class QuestionPublic(BaseModel):

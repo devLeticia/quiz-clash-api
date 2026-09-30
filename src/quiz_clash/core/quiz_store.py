@@ -8,8 +8,11 @@ from quiz_clash.core.exceptions import ParticipantLimitReachedError
 from quiz_clash.schemas.question import Question
 
 MAX_PARTICIPANTS_PER_QUIZ = 2
+MAX_ASKED_PER_DOCUMENT = 100
+MAX_TRACKED_DOCUMENTS = 1000
 
 _store: dict[str, dict] = {}
+_asked_questions: dict[str, list[Question]] = {}
 _store_lock = threading.RLock()
 
 
@@ -94,3 +97,22 @@ def get_answers(quiz_id: str, participant_id: str) -> dict:
         if entry is None:
             return {}
         return entry["answers"].get(participant_id, {}).copy()
+
+
+def get_asked_questions(document_key: str) -> list[Question]:
+    with _store_lock:
+        return list(_asked_questions.get(document_key, []))
+
+
+def add_asked_questions(document_key: str, questions: list[Question]) -> None:
+    with _store_lock:
+        asked = _asked_questions.setdefault(document_key, [])
+        asked.extend(questions)
+        del asked[:-MAX_ASKED_PER_DOCUMENT]
+        if len(_asked_questions) > MAX_TRACKED_DOCUMENTS:
+            _asked_questions.pop(next(iter(_asked_questions)))
+
+
+def reset_asked_questions(document_key: str) -> None:
+    with _store_lock:
+        _asked_questions.pop(document_key, None)
