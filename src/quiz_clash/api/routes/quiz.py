@@ -206,7 +206,7 @@ class AnswerRequest(BaseModel):
 
 
 class AnswerResponse(BaseModel):
-    correct: bool
+    correct_option_index: int
 
 
 class ParticipantTokenResponse(BaseModel):
@@ -269,7 +269,7 @@ def submit_answer(
     if not recorded:
         raise QuestionAlreadyAnsweredError(f"Question '{body.question_id}' was already answered.")
 
-    return AnswerResponse(correct=is_correct)
+    return AnswerResponse(correct_option_index=question.correct_option_index)
 
 
 class QuestionResult(BaseModel):
