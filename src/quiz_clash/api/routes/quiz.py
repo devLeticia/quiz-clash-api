@@ -2,7 +2,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_core.documents import Document
 from pydantic import BaseModel, Field, HttpUrl, field_validator
@@ -41,11 +41,16 @@ router = APIRouter()
 RATE_LIMIT = "5/minute;30/hour;100/day"
 bearer_scheme = HTTPBearer(auto_error=False)
 
+LANGUAGES = {"en": "English (en-US)", "pt": "Portuguese (pt-BR)", "es": "Spanish (es-419)"}
+
+
+def get_language(accept_language: str = Header("en")) -> str:
+    return LANGUAGES.get(accept_language[:2].lower(), LANGUAGES["en"])
+
 
 class TopicRequest(BaseModel):
     topic: str = Field(min_length=1, max_length=200)
     num_questions: int = Field(default=5, ge=1, le=20)
-    language: str = "English (en-US)"
 
     @field_validator("topic")
     @classmethod
@@ -62,7 +67,6 @@ class TopicRequest(BaseModel):
 class URLRequest(BaseModel):
     url: HttpUrl
     num_questions: int = Field(default=5, ge=1, le=20)
-    language: str = "English (en-US)"
 
     @field_validator("url", mode="before")
     @classmethod
@@ -105,11 +109,13 @@ def _build_quiz_response(questions: list[Question], requested_questions: int) ->
 
 @router.post("/from-topic", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
-def create_quiz_from_topic(request: Request, body: TopicRequest):
+def create_quiz_from_topic(
+    request: Request, body: TopicRequest, language: str = Depends(get_language)
+):
     questions = generate_questions_from_topic(
         topic=body.topic,
         num_questions=body.num_questions,
-        language=body.language,
+        language=language,
     )
     return _build_quiz_response(questions, body.num_questions)
 
@@ -120,7 +126,7 @@ def create_quiz_from_document(
     request: Request,
     file: UploadFile,
     num_questions: int = 5,
-    language: str = "English (en-US)",
+    language: str = Depends(get_language),
 ):
     file_bytes = read_upload_within_limit(file)
     detected_mime = validate_content_type(file_bytes, file.filename, category="document")
@@ -154,7 +160,7 @@ def create_quiz_from_image(
     request: Request,
     file: UploadFile,
     num_questions: int = 5,
-    language: str = "English (en-US)",
+    language: str = Depends(get_language),
 ):
     image_bytes = read_upload_within_limit(file)
     validate_content_type(image_bytes, file.filename, category="image")
@@ -165,23 +171,24 @@ def create_quiz_from_image(
 
 @router.post("/from-url", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
-def create_quiz_from_url(request: Request, body: URLRequest):
-    docs = load_url(str(body.url), language=body.language)
-    questions = generate_quiz_from_documents(docs, body.num_questions, body.language)
+def create_quiz_from_url(request: Request, body: URLRequest, language: str = Depends(get_language)):
+    docs = load_url(str(body.url), language=language)
+    questions = generate_quiz_from_documents(docs, body.num_questions, language)
     return _build_quiz_response(questions, body.num_questions)
 
 
 class PastedTextRequest(BaseModel):
     text: str = Field(min_length=1)
     num_questions: int = Field(default=5, ge=1, le=20)
-    language: str = "English (en-US)"
 
 
 @router.post("/from-text", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
-def create_quiz_from_text(request: Request, body: PastedTextRequest):
+def create_quiz_from_text(
+    request: Request, body: PastedTextRequest, language: str = Depends(get_language)
+):
     docs = [Document(page_content=body.text, metadata={"source": "pasted_text"})]
-    questions = generate_quiz_from_documents(docs, body.num_questions, body.language)
+    questions = generate_quiz_from_documents(docs, body.num_questions, language)
     return _build_quiz_response(questions, body.num_questions)
 
 
@@ -191,7 +198,7 @@ def create_quiz_from_audio(
     request: Request,
     file: UploadFile,
     num_questions: int = 5,
-    language: str = "English (en-US)",
+    language: str = Depends(get_language),
 ):
     audio_bytes = read_upload_within_limit(file)
     validate_content_type(audio_bytes, file.filename, category="audio")
