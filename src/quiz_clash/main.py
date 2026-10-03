@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from quiz_clash.api.routes import quiz
+from quiz_clash.api.routes import quiz, rooms
 from quiz_clash.core.exceptions import register_exception_handlers
 from quiz_clash.core.rate_limiter import limiter
 
@@ -23,6 +23,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.include_router(quiz.router, prefix="/quiz", tags=["quiz"])
+app.include_router(rooms.router, prefix="/rooms", tags=["rooms"])
 app.add_middleware(
     CORSMiddleware,
     allow_origins=DEV_ORIGINS,

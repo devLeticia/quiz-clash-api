@@ -221,7 +221,7 @@ class ParticipantTokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
-def _require_participant(quiz_id: str, credentials: HTTPAuthorizationCredentials | None) -> str:
+def require_participant(quiz_id: str, credentials: HTTPAuthorizationCredentials | None) -> str:
     if credentials is None:
         raise HTTPException(
             status_code=401,
@@ -258,7 +258,7 @@ def submit_answer(
 ):
     if get_quiz(quiz_id) is None:
         raise QuizNotFoundError(f"Quiz '{quiz_id}' not found.")
-    participant_id = _require_participant(quiz_id, credentials)
+    participant_id = require_participant(quiz_id, credentials)
 
     question = get_question(quiz_id, body.question_id)
     if question is None:
@@ -308,7 +308,7 @@ def get_quiz_results(
     if questions is None:
         raise QuizNotFoundError(f"Quiz '{quiz_id}' not found.")
 
-    participant_id = _require_participant(quiz_id, credentials)
+    participant_id = require_participant(quiz_id, credentials)
     answers = get_answers(quiz_id, participant_id)
     results = []
     correct_count = 0
