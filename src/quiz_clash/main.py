@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,7 @@ DEV_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
 ]
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", ",".join(DEV_ORIGINS)).split(",")
 
 logger = logging.getLogger("quiz_clash")
 app = FastAPI(title="Quiz Clash API")
@@ -26,7 +28,7 @@ app.include_router(quiz.router, prefix="/quiz", tags=["quiz"])
 app.include_router(rooms.router, prefix="/rooms", tags=["rooms"])
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=DEV_ORIGINS,
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],

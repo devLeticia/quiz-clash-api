@@ -1,0 +1,11 @@
+.git
+.venv
+.env
+.claude
+.vscode
+.ruff_cache
+data
+scratchpad
+tests
+TODO.md
+**/__pycache__
