@@ -34,6 +34,7 @@ from quiz_clash.schemas.question import (
     shuffle_answer_positions,
     to_public,
 )
+from quiz_clash.services.fake_quiz import FAKE_QUIZ, fake_questions
 from quiz_clash.services.quiz_service import generate_quiz_from_documents
 
 router = APIRouter()
@@ -112,6 +113,8 @@ def _build_quiz_response(questions: list[Question], requested_questions: int) ->
 def create_quiz_from_topic(
     request: Request, body: TopicRequest, language: str = Depends(get_language)
 ):
+    if FAKE_QUIZ:
+        return _build_quiz_response(fake_questions(body.num_questions), body.num_questions)
     questions = generate_questions_from_topic(
         topic=body.topic,
         num_questions=body.num_questions,
@@ -128,6 +131,8 @@ def create_quiz_from_document(
     num_questions: int = 5,
     language: str = Depends(get_language),
 ):
+    if FAKE_QUIZ:
+        return _build_quiz_response(fake_questions(num_questions), num_questions)
     file_bytes = read_upload_within_limit(file)
     detected_mime = validate_content_type(file_bytes, file.filename, category="document")
 
@@ -162,6 +167,8 @@ def create_quiz_from_image(
     num_questions: int = 5,
     language: str = Depends(get_language),
 ):
+    if FAKE_QUIZ:
+        return _build_quiz_response(fake_questions(num_questions), num_questions)
     image_bytes = read_upload_within_limit(file)
     validate_content_type(image_bytes, file.filename, category="image")
     docs = load_image(image_bytes, content_type=file.content_type, source_name=file.filename)
@@ -172,6 +179,8 @@ def create_quiz_from_image(
 @router.post("/from-url", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
 def create_quiz_from_url(request: Request, body: URLRequest, language: str = Depends(get_language)):
+    if FAKE_QUIZ:
+        return _build_quiz_response(fake_questions(body.num_questions), body.num_questions)
     docs = load_url(str(body.url), language=language)
     questions = generate_quiz_from_documents(docs, body.num_questions, language)
     return _build_quiz_response(questions, body.num_questions)
@@ -187,6 +196,8 @@ class PastedTextRequest(BaseModel):
 def create_quiz_from_text(
     request: Request, body: PastedTextRequest, language: str = Depends(get_language)
 ):
+    if FAKE_QUIZ:
+        return _build_quiz_response(fake_questions(body.num_questions), body.num_questions)
     docs = [Document(page_content=body.text, metadata={"source": "pasted_text"})]
     questions = generate_quiz_from_documents(docs, body.num_questions, language)
     return _build_quiz_response(questions, body.num_questions)
@@ -200,6 +211,8 @@ def create_quiz_from_audio(
     num_questions: int = 5,
     language: str = Depends(get_language),
 ):
+    if FAKE_QUIZ:
+        return _build_quiz_response(fake_questions(num_questions), num_questions)
     audio_bytes = read_upload_within_limit(file)
     validate_content_type(audio_bytes, file.filename, category="audio")
     docs = load_audio(audio_bytes, filename=file.filename)

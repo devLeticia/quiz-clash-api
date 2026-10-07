@@ -18,3 +18,6 @@ uv run ruff format .     # formatting
 uv run pre-commit install
 \`\`\`
 This ensures linting and formatting checks run automatically before every commit.
+
+### Testing without the LLM
+Set `FAKE_QUIZ=true` in `.env` to return fixed questions instead of reading files and calling OpenAI. No tokens are spent, and rate limiting is turned off. Set it back to `false` to generate real quizzes.
