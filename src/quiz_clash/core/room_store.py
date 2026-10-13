@@ -41,6 +41,7 @@ class Answer:
 @dataclass
 class Round:
     question: Question
+    opens_at: int
     ends_at: int
     answers: dict[str, Answer] = field(default_factory=dict)
     done: asyncio.Event = field(default_factory=asyncio.Event)
