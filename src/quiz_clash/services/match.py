@@ -22,6 +22,7 @@ from quiz_clash.schemas.question import Question, to_public
 
 COUNTDOWN_MS = 3000
 INTERSTITIAL_MS = 2800
+NEXT_INTERSTITIAL_MS = 2600
 REVEAL_MS = 3510
 ROUND_MS = 15000
 ANSWER_GRACE_MS = 500
@@ -100,7 +101,7 @@ async def run_match(room: Room) -> None:
 
 
 async def play_round(room: Room, index: int, question: Question) -> None:
-    shows_at = now_ms() + INTERSTITIAL_MS
+    shows_at = now_ms() + (NEXT_INTERSTITIAL_MS if index else INTERSTITIAL_MS)
     opens_at = shows_at + REVEAL_MS
     ends_at = opens_at + ROUND_MS
     current = Round(question=question, opens_at=opens_at, ends_at=ends_at)
