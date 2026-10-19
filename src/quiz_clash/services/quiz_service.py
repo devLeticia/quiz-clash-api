@@ -1,5 +1,8 @@
+import contextvars
 import hashlib
+import logging
 import threading
+import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
@@ -20,6 +23,8 @@ MIN_CONTENT_CHARS = 600
 SHORT_CONTENT_CHARS = 6000
 CHUNKS_PER_BATCH = 2
 MAX_TRACKED_SOURCES = 1000
+
+logger = logging.getLogger("quiz_clash")
 
 Generator = Callable[[], list[Question]]
 
@@ -60,7 +65,8 @@ def prepare_topic_quiz(topic: str, num_questions: int, language: str, difficulty
 
 def remember_source(quiz_id: str, generate: Generator, num_questions: int) -> None:
     """Keep how a quiz was made and start generating its next round in the background."""
-    source = QuizSource(generate, num_questions, _executor.submit(generate))
+    upcoming = _executor.submit(contextvars.copy_context().run, generate)
+    source = QuizSource(generate, num_questions, upcoming)
     with _sources_lock:
         _sources[quiz_id] = source
         if len(_sources) > MAX_TRACKED_SOURCES:
@@ -72,10 +78,20 @@ def next_round(quiz_id: str) -> tuple[list[Question], QuizSource] | None:
         source = _sources.pop(quiz_id, None)
     if source is None:
         return None
+    prefetch_hit = source.upcoming.done()
+    start = time.perf_counter()
     try:
         questions = source.upcoming.result()
     except Exception:
+        logger.exception("prefetch_failed")
         questions = source.generate()
+    logger.info(
+        "next_round",
+        extra={
+            "prefetch_hit": prefetch_hit,
+            "wait_ms": round((time.perf_counter() - start) * 1000),
+        },
+    )
     return questions, source
 
 
@@ -85,6 +101,10 @@ def _document_round(
     asked = get_asked_questions(document_key)
     questions = generate_questions(texts, num_questions, language, difficulty, asked)
     if len(questions) < num_questions and asked:
+        logger.info(
+            "asked_questions_reset",
+            extra={"generated": len(questions), "previously_asked": len(asked)},
+        )
         reset_asked_questions(document_key)
         questions = generate_questions(texts, num_questions, language, difficulty)
 

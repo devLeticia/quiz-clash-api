@@ -1,4 +1,5 @@
 import itertools
+import logging
 import math
 import re
 
@@ -11,6 +12,8 @@ from quiz_clash.core.exceptions import QuestionGenerationError
 from quiz_clash.schemas.question import Question, QuestionList
 
 load_dotenv()
+
+logger = logging.getLogger("quiz_clash")
 
 llm = ChatOpenAI(model="gpt-4o-mini")
 structured_llm = llm.with_structured_output(QuestionList)
@@ -128,11 +131,13 @@ def generate_questions(
     asked = asked or []
     questions: list[Question] = []
 
-    for _ in range(max_rounds):
+    for round_number in range(1, max_rounds + 1):
         missing = num_questions - len(questions)
         if missing <= 0:
             break
         per_text = math.ceil(missing / len(texts))
+        accepted_before = len(questions)
+        rejected = 0
 
         for text in texts:
             if len(questions) >= num_questions:
@@ -142,26 +147,40 @@ def generate_questions(
                 *(q.question for q in questions),
             ]
             for q in _generate_from_text(text, per_text, language, difficulty, avoid):
-                if _is_acceptable(q, text, asked, questions):
+                reason = _rejection_reason(q, text, asked, questions)
+                if reason:
+                    rejected += 1
+                    logger.info("question_rejected", extra={"reason": reason})
+                else:
                     questions.append(q)
+
+        logger.info(
+            "generation_round",
+            extra={
+                "round": round_number,
+                "missing": missing,
+                "accepted": len(questions) - accepted_before,
+                "rejected": rejected,
+            },
+        )
 
     return questions[:num_questions]
 
 
-def _is_acceptable(
+def _rejection_reason(
     question: Question, text: str, asked: list[Question], questions: list[Question]
-) -> bool:
-    return (
-        is_grounded(question, text)
-        and has_distinct_options(question)
-        and not gives_away_answer(question)
-        and not any(
-            _similar(question.question, q.question, fuzz.ratio) for q in [*asked, *questions]
-        )
-        and not any(
-            _similar(question.source_quote, q.source_quote, fuzz.partial_ratio) for q in asked
-        )
-    )
+) -> str | None:
+    if not is_grounded(question, text):
+        return "not_grounded"
+    if not has_distinct_options(question):
+        return "duplicate_options"
+    if gives_away_answer(question):
+        return "gives_away_answer"
+    if any(_similar(question.question, q.question, fuzz.ratio) for q in [*asked, *questions]):
+        return "duplicate_question"
+    if any(_similar(question.source_quote, q.source_quote, fuzz.partial_ratio) for q in asked):
+        return "reused_quote"
+    return None
 
 
 def _similar(a: str | None, b: str | None, scorer, threshold: float = 90.0) -> bool:

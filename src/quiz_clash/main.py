@@ -1,5 +1,7 @@
 import logging
 import os
+import time
+import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +11,7 @@ from slowapi.errors import RateLimitExceeded
 
 from quiz_clash.api.routes import quiz, rooms
 from quiz_clash.core.exceptions import register_exception_handlers
+from quiz_clash.core.logging import request_id, setup_logging
 from quiz_clash.core.rate_limiter import limiter
 
 DEV_ORIGINS = [
@@ -19,6 +22,7 @@ DEV_ORIGINS = [
 ]
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", ",".join(DEV_ORIGINS)).split(",")
 
+setup_logging()
 logger = logging.getLogger("quiz_clash")
 app = FastAPI(title="Quiz Clash API")
 app.state.limiter = limiter
@@ -35,6 +39,28 @@ app.add_middleware(
 )
 
 register_exception_handlers(app)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    token = request_id.set(uuid.uuid4().hex[:12])
+    start = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    finally:
+        logger.info(
+            "request",
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "status": status,
+                "duration_ms": round((time.perf_counter() - start) * 1000),
+            },
+        )
+        request_id.reset(token)
 
 
 @app.exception_handler(Exception)

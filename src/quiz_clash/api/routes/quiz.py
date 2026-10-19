@@ -1,3 +1,4 @@
+import logging
 import re
 import tempfile
 from functools import partial
@@ -45,6 +46,7 @@ from quiz_clash.services.quiz_service import (
 )
 
 router = APIRouter()
+logger = logging.getLogger("quiz_clash")
 
 RATE_LIMIT = "5/minute;30/hour;100/day"
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -103,6 +105,14 @@ def _build_quiz_response(questions: list[Question], requested_questions: int) ->
     shuffled = shuffle_answer_positions(questions)
     quiz_id = uuid.uuid4().hex
     save_quiz(quiz_id, shuffled)
+    logger.info(
+        "quiz_created",
+        extra={
+            "quiz_id": quiz_id,
+            "requested_questions": requested_questions,
+            "generated_questions": len(questions),
+        },
+    )
 
     warning = None
     if len(questions) < requested_questions:
