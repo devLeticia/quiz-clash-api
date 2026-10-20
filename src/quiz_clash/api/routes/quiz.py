@@ -8,6 +8,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_core.documents import Document
+from langsmith import traceable
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from quiz_clash.api.validation import (
@@ -26,6 +27,7 @@ from quiz_clash.core.quiz_store import (
     save_quiz,
 )
 from quiz_clash.core.rate_limiter import limiter
+from quiz_clash.core.tracing import trace_inputs
 from quiz_clash.ingestion.audio_loader import load_audio
 from quiz_clash.ingestion.document_loader import load_document
 from quiz_clash.ingestion.image_loader import load_image
@@ -141,6 +143,7 @@ def _fake_quiz(num_questions: int) -> QuizCreateResponse:
 
 @router.post("/from-topic", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
+@traceable(process_inputs=trace_inputs)
 def create_quiz_from_topic(
     request: Request,
     body: TopicRequest,
@@ -155,6 +158,7 @@ def create_quiz_from_topic(
 
 @router.post("/from-document", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
+@traceable(process_inputs=trace_inputs)
 def create_quiz_from_document(
     request: Request,
     file: UploadFile,
@@ -192,6 +196,7 @@ def create_quiz_from_document(
 
 @router.post("/from-image", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
+@traceable(process_inputs=trace_inputs)
 def create_quiz_from_image(
     request: Request,
     file: UploadFile,
@@ -210,6 +215,7 @@ def create_quiz_from_image(
 
 @router.post("/from-url", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
+@traceable(process_inputs=trace_inputs)
 def create_quiz_from_url(
     request: Request,
     body: URLRequest,
@@ -230,6 +236,7 @@ class PastedTextRequest(BaseModel):
 
 @router.post("/from-text", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
+@traceable(process_inputs=trace_inputs)
 def create_quiz_from_text(
     request: Request,
     body: PastedTextRequest,
@@ -245,6 +252,7 @@ def create_quiz_from_text(
 
 @router.post("/from-audio", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
+@traceable(process_inputs=trace_inputs)
 def create_quiz_from_audio(
     request: Request,
     file: UploadFile,
@@ -335,6 +343,7 @@ def submit_answer(
 
 @router.post("/{quiz_id}/next", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
+@traceable(process_inputs=trace_inputs)
 def create_next_quiz(
     request: Request,
     quiz_id: str,

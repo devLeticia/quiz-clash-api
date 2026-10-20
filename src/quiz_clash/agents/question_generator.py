@@ -2,10 +2,12 @@ import itertools
 import logging
 import math
 import re
+from collections import Counter
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from langsmith import trace
 from rapidfuzz import fuzz
 
 from quiz_clash.core.exceptions import QuestionGenerationError
@@ -137,30 +139,34 @@ def generate_questions(
             break
         per_text = math.ceil(missing / len(texts))
         accepted_before = len(questions)
-        rejected = 0
+        rejections = Counter()
 
-        for text in texts:
-            if len(questions) >= num_questions:
-                break
-            avoid = [
-                *(f"{q.question} (based on: {q.source_quote})" for q in asked),
-                *(q.question for q in questions),
-            ]
-            for q in _generate_from_text(text, per_text, language, difficulty, avoid):
-                reason = _rejection_reason(q, text, asked, questions)
-                if reason:
-                    rejected += 1
-                    logger.info("question_rejected", extra={"reason": reason})
-                else:
-                    questions.append(q)
+        with trace("generation_round", inputs={"round": round_number, "missing": missing}) as run:
+            for text in texts:
+                if len(questions) >= num_questions:
+                    break
+                avoid = [
+                    *(f"{q.question} (based on: {q.source_quote})" for q in asked),
+                    *(q.question for q in questions),
+                ]
+                for q in _generate_from_text(text, per_text, language, difficulty, avoid):
+                    reason = _rejection_reason(q, text, asked, questions)
+                    if reason:
+                        rejections[reason] += 1
+                        logger.info("question_rejected", extra={"reason": reason})
+                    else:
+                        questions.append(q)
+
+            accepted = len(questions) - accepted_before
+            run.end(outputs={"accepted": accepted, "rejections": dict(rejections)})
 
         logger.info(
             "generation_round",
             extra={
                 "round": round_number,
                 "missing": missing,
-                "accepted": len(questions) - accepted_before,
-                "rejected": rejected,
+                "accepted": accepted,
+                "rejected": rejections.total(),
             },
         )
 

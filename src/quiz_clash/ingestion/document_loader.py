@@ -1,6 +1,8 @@
 from langchain_core.documents import Document
+from langsmith import traceable
 
 from quiz_clash.core.exceptions import EmptyDocumentError, UnsupportedFileTypeError
+from quiz_clash.core.tracing import trace_inputs
 from quiz_clash.ingestion.docx_loader import load_docx
 from quiz_clash.ingestion.pdf_loader import load_pdf
 from quiz_clash.ingestion.pptx_loader import load_pptx
@@ -18,6 +20,7 @@ def _load_txt(file_bytes: bytes, source_name: str) -> list[Document]:
     return [Document(page_content=text, metadata={"source": source_name})]
 
 
+@traceable(process_inputs=trace_inputs)
 def load_document(
     file_bytes: bytes,
     filename: str,

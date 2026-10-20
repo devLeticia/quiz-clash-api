@@ -6,6 +6,7 @@ import uuid
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from langsmith import tracing_context
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -47,7 +48,8 @@ async def log_requests(request: Request, call_next):
     start = time.perf_counter()
     status = 500
     try:
-        response = await call_next(request)
+        with tracing_context(metadata={"request_id": request_id.get()}):
+            response = await call_next(request)
         status = response.status_code
         return response
     finally:

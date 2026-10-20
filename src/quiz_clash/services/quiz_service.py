@@ -8,6 +8,8 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
 
+from langsmith import traceable
+
 from quiz_clash.agents.question_generator import generate_questions, generate_questions_from_topic
 from quiz_clash.core.exceptions import InsufficientContentError
 from quiz_clash.core.quiz_store import (
@@ -15,6 +17,7 @@ from quiz_clash.core.quiz_store import (
     get_asked_questions,
     reset_asked_questions,
 )
+from quiz_clash.core.tracing import only
 from quiz_clash.rag.chunking import split_documents
 from quiz_clash.rag.vector_store import build_vector_store, select_diverse_chunks
 from quiz_clash.schemas.question import Question
@@ -65,7 +68,8 @@ def prepare_topic_quiz(topic: str, num_questions: int, language: str, difficulty
 
 def remember_source(quiz_id: str, generate: Generator, num_questions: int) -> None:
     """Keep how a quiz was made and start generating its next round in the background."""
-    upcoming = _executor.submit(contextvars.copy_context().run, generate)
+    prefetch = traceable(name="prefetch_next_round")(generate)
+    upcoming = _executor.submit(contextvars.copy_context().run, prefetch)
     source = QuizSource(generate, num_questions, upcoming)
     with _sources_lock:
         _sources[quiz_id] = source
@@ -95,6 +99,7 @@ def next_round(quiz_id: str) -> tuple[list[Question], QuizSource] | None:
     return questions, source
 
 
+@traceable(name="generate_round", process_inputs=only("num_questions", "language", "difficulty"))
 def _document_round(
     texts: list[str], document_key: str, num_questions: int, language: str, difficulty: str
 ) -> list[Question]:
@@ -112,6 +117,9 @@ def _document_round(
     return questions
 
 
+@traceable(
+    name="generate_round", process_inputs=only("topic", "num_questions", "language", "difficulty")
+)
 def _topic_round(
     topic: str, topic_key: str, num_questions: int, language: str, difficulty: str
 ) -> list[Question]:
@@ -121,6 +129,7 @@ def _topic_round(
     return questions
 
 
+@traceable(name="build_texts", process_inputs=only("num_questions"))
 def _build_texts(docs: list, full_text: str, num_questions: int) -> list[str]:
     if len(full_text) <= SHORT_CONTENT_CHARS:
         return [full_text]
