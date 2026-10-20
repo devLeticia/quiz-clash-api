@@ -1,13 +1,16 @@
+import logging
 import re
 import tempfile
+from functools import partial
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_core.documents import Document
+from langsmith import traceable
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
-from quiz_clash.agents.question_generator import generate_questions_from_topic
 from quiz_clash.api.validation import (
     read_upload_within_limit,
     safe_temp_filename,
@@ -24,6 +27,7 @@ from quiz_clash.core.quiz_store import (
     save_quiz,
 )
 from quiz_clash.core.rate_limiter import limiter
+from quiz_clash.core.tracing import trace_inputs
 from quiz_clash.ingestion.audio_loader import load_audio
 from quiz_clash.ingestion.document_loader import load_document
 from quiz_clash.ingestion.image_loader import load_image
@@ -35,9 +39,16 @@ from quiz_clash.schemas.question import (
     to_public,
 )
 from quiz_clash.services.fake_quiz import FAKE_QUIZ, fake_questions
-from quiz_clash.services.quiz_service import generate_quiz_from_documents
+from quiz_clash.services.quiz_service import (
+    Generator,
+    next_round,
+    prepare_document_quiz,
+    prepare_topic_quiz,
+    remember_source,
+)
 
 router = APIRouter()
+logger = logging.getLogger("quiz_clash")
 
 RATE_LIMIT = "5/minute;30/hour;100/day"
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -47,6 +58,10 @@ LANGUAGES = {"en": "English (en-US)", "pt": "Portuguese (pt-BR)", "es": "Spanish
 
 def get_language(accept_language: str = Header("en")) -> str:
     return LANGUAGES.get(accept_language[:2].lower(), LANGUAGES["en"])
+
+
+def get_difficulty(difficulty: Literal["easy", "medium", "hard"] = "medium") -> str:
+    return difficulty
 
 
 class TopicRequest(BaseModel):
@@ -92,6 +107,14 @@ def _build_quiz_response(questions: list[Question], requested_questions: int) ->
     shuffled = shuffle_answer_positions(questions)
     quiz_id = uuid.uuid4().hex
     save_quiz(quiz_id, shuffled)
+    logger.info(
+        "quiz_created",
+        extra={
+            "quiz_id": quiz_id,
+            "requested_questions": requested_questions,
+            "generated_questions": len(questions),
+        },
+    )
 
     warning = None
     if len(questions) < requested_questions:
@@ -108,31 +131,43 @@ def _build_quiz_response(questions: list[Question], requested_questions: int) ->
     )
 
 
+def _create_quiz(generate: Generator, num_questions: int) -> QuizCreateResponse:
+    response = _build_quiz_response(generate(), num_questions)
+    remember_source(response.quiz_id, generate, num_questions)
+    return response
+
+
+def _fake_quiz(num_questions: int) -> QuizCreateResponse:
+    return _create_quiz(partial(fake_questions, num_questions), num_questions)
+
+
 @router.post("/from-topic", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
+@traceable(process_inputs=trace_inputs)
 def create_quiz_from_topic(
-    request: Request, body: TopicRequest, language: str = Depends(get_language)
+    request: Request,
+    body: TopicRequest,
+    language: str = Depends(get_language),
+    difficulty: str = Depends(get_difficulty),
 ):
     if FAKE_QUIZ:
-        return _build_quiz_response(fake_questions(body.num_questions), body.num_questions)
-    questions = generate_questions_from_topic(
-        topic=body.topic,
-        num_questions=body.num_questions,
-        language=language,
-    )
-    return _build_quiz_response(questions, body.num_questions)
+        return _fake_quiz(body.num_questions)
+    generate = prepare_topic_quiz(body.topic, body.num_questions, language, difficulty)
+    return _create_quiz(generate, body.num_questions)
 
 
 @router.post("/from-document", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
+@traceable(process_inputs=trace_inputs)
 def create_quiz_from_document(
     request: Request,
     file: UploadFile,
     num_questions: int = 5,
     language: str = Depends(get_language),
+    difficulty: str = Depends(get_difficulty),
 ):
     if FAKE_QUIZ:
-        return _build_quiz_response(fake_questions(num_questions), num_questions)
+        return _fake_quiz(num_questions)
     file_bytes = read_upload_within_limit(file)
     detected_mime = validate_content_type(file_bytes, file.filename, category="document")
 
@@ -151,39 +186,47 @@ def create_quiz_from_document(
             detected_mime=detected_mime,
             tmp_path_for_pdf=tmp_path,
         )
-        questions = generate_quiz_from_documents(docs, num_questions, language)
     finally:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
 
-    return _build_quiz_response(questions, num_questions)
+    generate = prepare_document_quiz(docs, num_questions, language, difficulty)
+    return _create_quiz(generate, num_questions)
 
 
 @router.post("/from-image", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
+@traceable(process_inputs=trace_inputs)
 def create_quiz_from_image(
     request: Request,
     file: UploadFile,
     num_questions: int = 5,
     language: str = Depends(get_language),
+    difficulty: str = Depends(get_difficulty),
 ):
     if FAKE_QUIZ:
-        return _build_quiz_response(fake_questions(num_questions), num_questions)
+        return _fake_quiz(num_questions)
     image_bytes = read_upload_within_limit(file)
     validate_content_type(image_bytes, file.filename, category="image")
     docs = load_image(image_bytes, content_type=file.content_type, source_name=file.filename)
-    questions = generate_quiz_from_documents(docs, num_questions, language)
-    return _build_quiz_response(questions, num_questions)
+    generate = prepare_document_quiz(docs, num_questions, language, difficulty)
+    return _create_quiz(generate, num_questions)
 
 
 @router.post("/from-url", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
-def create_quiz_from_url(request: Request, body: URLRequest, language: str = Depends(get_language)):
+@traceable(process_inputs=trace_inputs)
+def create_quiz_from_url(
+    request: Request,
+    body: URLRequest,
+    language: str = Depends(get_language),
+    difficulty: str = Depends(get_difficulty),
+):
     if FAKE_QUIZ:
-        return _build_quiz_response(fake_questions(body.num_questions), body.num_questions)
+        return _fake_quiz(body.num_questions)
     docs = load_url(str(body.url), language=language)
-    questions = generate_quiz_from_documents(docs, body.num_questions, language)
-    return _build_quiz_response(questions, body.num_questions)
+    generate = prepare_document_quiz(docs, body.num_questions, language, difficulty)
+    return _create_quiz(generate, body.num_questions)
 
 
 class PastedTextRequest(BaseModel):
@@ -193,31 +236,37 @@ class PastedTextRequest(BaseModel):
 
 @router.post("/from-text", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
+@traceable(process_inputs=trace_inputs)
 def create_quiz_from_text(
-    request: Request, body: PastedTextRequest, language: str = Depends(get_language)
+    request: Request,
+    body: PastedTextRequest,
+    language: str = Depends(get_language),
+    difficulty: str = Depends(get_difficulty),
 ):
     if FAKE_QUIZ:
-        return _build_quiz_response(fake_questions(body.num_questions), body.num_questions)
+        return _fake_quiz(body.num_questions)
     docs = [Document(page_content=body.text, metadata={"source": "pasted_text"})]
-    questions = generate_quiz_from_documents(docs, body.num_questions, language)
-    return _build_quiz_response(questions, body.num_questions)
+    generate = prepare_document_quiz(docs, body.num_questions, language, difficulty)
+    return _create_quiz(generate, body.num_questions)
 
 
 @router.post("/from-audio", response_model=QuizCreateResponse)
 @limiter.limit(RATE_LIMIT)
+@traceable(process_inputs=trace_inputs)
 def create_quiz_from_audio(
     request: Request,
     file: UploadFile,
     num_questions: int = 5,
     language: str = Depends(get_language),
+    difficulty: str = Depends(get_difficulty),
 ):
     if FAKE_QUIZ:
-        return _build_quiz_response(fake_questions(num_questions), num_questions)
+        return _fake_quiz(num_questions)
     audio_bytes = read_upload_within_limit(file)
     validate_content_type(audio_bytes, file.filename, category="audio")
     docs = load_audio(audio_bytes, filename=file.filename)
-    questions = generate_quiz_from_documents(docs, num_questions, language)
-    return _build_quiz_response(questions, num_questions)
+    generate = prepare_document_quiz(docs, num_questions, language, difficulty)
+    return _create_quiz(generate, num_questions)
 
 
 class AnswerRequest(BaseModel):
@@ -290,6 +339,24 @@ def submit_answer(
         raise QuestionAlreadyAnsweredError(f"Question '{body.question_id}' was already answered.")
 
     return AnswerResponse(correct_option_index=question.correct_option_index)
+
+
+@router.post("/{quiz_id}/next", response_model=QuizCreateResponse)
+@limiter.limit(RATE_LIMIT)
+@traceable(process_inputs=trace_inputs)
+def create_next_quiz(
+    request: Request,
+    quiz_id: str,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+):
+    require_participant(quiz_id, credentials)
+    result = next_round(quiz_id)
+    if result is None:
+        raise QuizNotFoundError(f"Quiz '{quiz_id}' has no next round.")
+    questions, source = result
+    response = _build_quiz_response(questions, source.num_questions)
+    remember_source(response.quiz_id, source.generate, source.num_questions)
+    return response
 
 
 class QuestionResult(BaseModel):

@@ -22,13 +22,14 @@ from quiz_clash.schemas.question import Question, to_public
 
 COUNTDOWN_MS = 3000
 INTERSTITIAL_MS = 2800
+NEXT_INTERSTITIAL_MS = 2600
 REVEAL_MS = 3510
 ROUND_MS = 15000
 ANSWER_GRACE_MS = 500
 STRIKE_MS = 1500
 ROUND_END_PAUSE_MS = 1000
-BASE_DAMAGE = 20
-SPEED_BONUS = 10
+BASE_DAMAGE = 10
+SPEED_BONUS = 6
 MAX_NICKNAME = 14
 PLAYABLE_HEROES = (0, 1)
 
@@ -100,10 +101,10 @@ async def run_match(room: Room) -> None:
 
 
 async def play_round(room: Room, index: int, question: Question) -> None:
-    shows_at = now_ms() + INTERSTITIAL_MS
+    shows_at = now_ms() + (NEXT_INTERSTITIAL_MS if index else INTERSTITIAL_MS)
     opens_at = shows_at + REVEAL_MS
     ends_at = opens_at + ROUND_MS
-    current = Round(question=question, ends_at=ends_at)
+    current = Round(question=question, opens_at=opens_at, ends_at=ends_at)
     room.current = current
 
     await broadcast(
@@ -171,7 +172,7 @@ async def handle_answer(room: Room, player: Player, question_id: str, option: in
     ):
         return
     answered_at = now_ms()
-    if answered_at > current.ends_at + ANSWER_GRACE_MS:
+    if not current.opens_at - ANSWER_GRACE_MS <= answered_at <= current.ends_at + ANSWER_GRACE_MS:
         return
 
     correct = option == current.question.correct_option_index
@@ -197,7 +198,7 @@ async def handle_message(room: Room, player: Player, message: dict) -> None:
         await broadcast(room, lobby_message(room))
 
     elif kind == "start" and player.host and room.status == "lobby":
-        if len(room.players) == MAX_PLAYERS:
+        if len(room.players) == MAX_PLAYERS and all(p.host or p.nickname for p in room.players):
             start_match(room, room.quiz_id, player.participant_id)
 
     elif kind == "answer":

@@ -2,14 +2,17 @@ import io
 
 from dotenv import load_dotenv
 from langchain_core.documents import Document
+from langsmith import traceable
 from openai import OpenAI
 
 from quiz_clash.core.exceptions import AudioProcessingError, EmptyDocumentError
+from quiz_clash.core.tracing import trace_inputs
 
 load_dotenv()
 client = OpenAI()
 
 
+@traceable(process_inputs=trace_inputs)
 def load_audio(audio_bytes: bytes, filename: str) -> list[Document]:
     """Transcribe an audio file (e.g. a recorded lecture or explanation) into text."""
     audio_file = io.BytesIO(audio_bytes)

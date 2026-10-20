@@ -4,6 +4,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.15 /uv /usr/local/bin/uv
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
+    LOG_FORMAT=json \
     PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app

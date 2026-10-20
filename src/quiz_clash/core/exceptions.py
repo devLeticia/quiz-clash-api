@@ -1,5 +1,9 @@
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+
+logger = logging.getLogger("quiz_clash")
 
 
 class QuizClashError(Exception):
@@ -71,6 +75,7 @@ async def conflict_handler(request: Request, exc: Exception):
 
 
 async def generation_error_handler(request: Request, exc: Exception):
+    logger.error("question_generation_failed", exc_info=exc)
     return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 

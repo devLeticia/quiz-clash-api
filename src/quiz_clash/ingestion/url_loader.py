@@ -1,9 +1,11 @@
 import httpx
 import trafilatura
 from langchain_core.documents import Document
+from langsmith import traceable
 
 from quiz_clash.core.exceptions import EmptyDocumentError, URLProcessingError
 from quiz_clash.core.ssrf_guard import assert_url_is_safe
+from quiz_clash.core.tracing import trace_inputs
 from quiz_clash.ingestion.youtube_loader import is_youtube_url, load_youtube_transcript
 
 MAX_REDIRECTS = 5
@@ -39,6 +41,7 @@ def _fetch_safely(url: str) -> str:
     raise URLProcessingError("Too many redirects.")
 
 
+@traceable(process_inputs=trace_inputs)
 def load_url(url: str, language: str | None = None) -> list[Document]:
     """Fetch a web page (or YouTube video transcript) and extract its text content."""
     if is_youtube_url(url):

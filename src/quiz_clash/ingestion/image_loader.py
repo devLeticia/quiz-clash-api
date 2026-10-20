@@ -3,12 +3,15 @@ import base64
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
+from langsmith import traceable
 
 from quiz_clash.core.exceptions import EmptyDocumentError, ImageProcessingError
+from quiz_clash.core.tracing import trace_inputs
 
 vision_llm = ChatOpenAI(model="gpt-4o-mini")
 
 
+@traceable(process_inputs=trace_inputs)
 def load_image(
     image_bytes: bytes, content_type: str, source_name: str = "uploaded_image"
 ) -> list[Document]:
