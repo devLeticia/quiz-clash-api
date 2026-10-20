@@ -11,6 +11,7 @@ from langsmith import trace
 from rapidfuzz import fuzz
 
 from quiz_clash.core.exceptions import QuestionGenerationError
+from quiz_clash.core.tracing import score
 from quiz_clash.schemas.question import Question, QuestionList
 
 load_dotenv()
@@ -158,6 +159,8 @@ def generate_questions(
                         questions.append(q)
 
             accepted = len(questions) - accepted_before
+            if accepted or rejections:
+                score("rejection_rate", rejections.total() / (accepted + rejections.total()))
             run.end(outputs={"accepted": accepted, "rejections": dict(rejections)})
 
         logger.info(

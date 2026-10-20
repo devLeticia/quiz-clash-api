@@ -1,5 +1,6 @@
 from fastapi import Request
 from fastapi.security import HTTPAuthorizationCredentials
+from langsmith.run_helpers import get_current_run_tree
 from starlette.datastructures import UploadFile
 
 
@@ -21,3 +22,9 @@ def trace_inputs(inputs: dict) -> dict:
         for key, value in inputs.items()
         if not isinstance(value, Request | HTTPAuthorizationCredentials)
     }
+
+
+def score(key: str, value: float) -> None:
+    run = get_current_run_tree()
+    if run is not None:
+        run.client.create_feedback(run.id, key, score=value, trace_id=run.trace_id)

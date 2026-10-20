@@ -17,7 +17,7 @@ from quiz_clash.core.quiz_store import (
     get_asked_questions,
     reset_asked_questions,
 )
-from quiz_clash.core.tracing import only
+from quiz_clash.core.tracing import only, score
 from quiz_clash.rag.chunking import split_documents
 from quiz_clash.rag.vector_store import build_vector_store, select_diverse_chunks
 from quiz_clash.schemas.question import Question
@@ -89,13 +89,10 @@ def next_round(quiz_id: str) -> tuple[list[Question], QuizSource] | None:
     except Exception:
         logger.exception("prefetch_failed")
         questions = source.generate()
-    logger.info(
-        "next_round",
-        extra={
-            "prefetch_hit": prefetch_hit,
-            "wait_ms": round((time.perf_counter() - start) * 1000),
-        },
-    )
+    wait_ms = round((time.perf_counter() - start) * 1000)
+    logger.info("next_round", extra={"prefetch_hit": prefetch_hit, "wait_ms": wait_ms})
+    score("prefetch_hit", float(prefetch_hit))
+    score("prefetch_wait_ms", wait_ms)
     return questions, source
 
 
@@ -114,6 +111,7 @@ def _document_round(
         questions = generate_questions(texts, num_questions, language, difficulty)
 
     add_asked_questions(document_key, questions)
+    score("fill_rate", min(len(questions) / num_questions, 1.0))
     return questions
 
 
@@ -126,6 +124,7 @@ def _topic_round(
     asked = [q.question for q in get_asked_questions(topic_key)]
     questions = generate_questions_from_topic(topic, num_questions, language, difficulty, asked)
     add_asked_questions(topic_key, questions)
+    score("fill_rate", min(len(questions) / num_questions, 1.0))
     return questions
 
 
